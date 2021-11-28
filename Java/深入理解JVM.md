@@ -331,9 +331,638 @@
 
 ## 6. 类文件结构
 
+1. 概述
+2. 无关性的基石：**<u>虚拟机和字节码存储格式。</u>**
+3. Class类文件的结构
+    1. Class文件是一组以字节为基础单位的二进制流，更数据项目严格按照顺序紧凑地排列在文件之中，中间没有添加任何分隔符。当遇到需要占用单个字节以上的空间的数据项时，则会按照高位在前（[Big Endian](https://zh.wikipedia.org/wiki/%E5%AD%97%E8%8A%82%E5%BA%8F)）的方式分割成若干个字节进行存储。
+    2. Class文件格式：**<u>无符号数</u>**（基本数据类型）和**<u>表</u>**（多个无符号数活着其他表作为数据项构成）。
+    3. 魔数与Class文件的版本
+        1. 魔数：每个class的前四个字节。确定这个文件是否为能被虚拟机接受的Class文件。值为：0XCAFEBABE。
+        2. 紧接着魔数的四个字节是Class文件的版本号。第5、6是次版本号，7、8是主版本号。
+    4. 常量池：在入口要放置一个u2类型的数值标明常量的数量（从1开始）
+        1. 字面量：文本字符串、声明为final的常量值；
+        2. 符号引用：
+            1. 被模块导出或者开放的包；
+            2. 类和接口的全限定名；
+            3. 字段名称和描述符
+            4. 方法名称和描述符
+            5. 方法句柄和方法类型
+            6. 动态调用点和动态常量
+    5. 访问标志：紧接着的两个字节，用于识别一些类或者接口层次的访问信息，包括这个class是类还是接口，是否定义为public；是否定义abstract，如果是类是否定义为final等。
+    6. 类索引，父类索引和接口索引集合
+    7. 字段表集合：用于描述接口或者类中声明的变量。
+        1. 包含类级变量以及实例级变量，但不包含方法内的局部变量。
+        2. 字段的作用域（public 、private、protected）
+        3. 实例变量还是类变量（static）
+        4. 可变性（final）
+        5. 并发可见性（violate）
+        6. 可否被序列化（transient）
+        7. 字段数据类型（基本类型、对象、数组）
+        8. 字段名称-》引用常量池的常量
+    8. 方法表集合
+    9. 属性表集合
+        1. Code
+        2. Exceptions
+        3. LineumberTbale
+        4. LocalVirableTable 和LocalVariableTypeTable
+        5. SourceFile和SourceDebugExtension
+        6. ConstantValue
+        7. InnerClasses
+        8. Deprecated 及Synthetic 
+        9. StackmapTable
+        10. Signature
+        11. BootstrapMethods
+        12. MethodParameters
+        13. 模块化相关属性
+        14. 运行时注解相关属性
+    10. 字节码指令简介
+    11. 公有设计，私有实现
+    12. class文件结构的发展
+    13. 本章小结
+        1. class文件结构中的各个组成部分，以及每个部分的定义、数据结构和使用方法
+
 ## 7. 虚拟机类加载机制
 
+1. 概述：虚拟机如何加载这些Class文件，文件中的信息进入到虚拟机之后的变化
+
+    1. JVM把描述累的数据从Class文件加载到内存，并对数据进行校验、转换解析和初始化，最终形成可以被虚拟机直接使用的Java类型，称为虚拟机的类加载机制。
+
+2. 类加载的时机
+
+    1. 生命周期：**<u>加载、验证、准备、解析、初始化、使用、卸载</u>**
+
+    2. 解析有可能在初始化之后再开始，为了支持**<u>运行时绑定</u>**（动态绑定）的特性
+
+    3. 什么时候开始“**<u>加载</u>**”并没有约束，但是**有且只有六种情况**必须立即**<u>“初始化”</u>**，（加载验证准备自然要在他之前开始）：
+
+        1. 遇到new,getstatic, putstatic, invokestatic这四条字节码指令，如果类型没有进行过初始化，则需要先触发其初始化阶段，能够生成这四个指令的典型场景有：
+            1. 使用new关键字实例化对象的时候；
+            2. 读取或者设置一个类型的静态字段（被final修饰、已在编译器把结果放入常量池的静态字段除外）的时候；
+            3. 调用一个类型的静态方法的时候；
+        2. 使用java.lang.reflect包的方法对类型进行反射调用的时候，如果类型没有进行过初始化，则需要先触发其初始化；
+        3. 当初始化类的时候，其父类还没有进行初始化，则需要先触发其父类的初始化；
+        4. 当虚拟机启动时，用户需要制定一个执行的主类（包含```main()```方法的那个类），虚拟机会先初始化这个主类；
+        5. 当使用JDK7新加入的动态语言支持时候，如果一个java.lang.invoke.MethodHandle实例最后的解析结果为REF_getStatic,REF_putStatic, REF_invokeStatic,REF_newInvokeSpecial四种类型方法句柄，并且这个方法句柄对应的类没有进行过初始化，则需要先触发其初始化；
+        6. 当一个接口中定义了JDK8新加入的默认方法（default修饰的接口方法）时，如果这个接口的实现类发生了初始化，那该接口要在其之前被初始化。
+
+    4. 以上六种行为称为对一个类型进行**主动引用**， 除此之外，所有的引用类型的方式都不会触发初始化，称为**被动引用。**
+
+        1. ```java
+            /**
+             * 被动使用类字段演示一：
+             * 通过子类引用父类的静态字段，不会导致子类初始化
+             */
+            
+            public class SuperClass {
+                static {
+                  System.out.println("Superclass init");
+                }
+            
+                public static int value = 123;
+            }
+            
+            public class SubClass extends SuperClass{
+                static {
+                  System.out.println("Subclass init");
+                }
+            }
+            
+            public class NotInitialization {
+                public static void main(String[] args) {
+                    System.out.println(SubClass.value);
+                }
+            }
+            
+            ```
+
+        2. 上述代码运行后除了value之外，只会输出"Superclass init"，因为对于静态字段，只有直接定义这个字段的类才会被初始化，因此只有通过子类引用父类的静态字段，只会触发父类的初始化而不会触发子类的初始化。
+
+        3. ```java
+            /**
+             * 被动使用类字段演示二：
+             * 通过数组定义引用类，不会导致子类初始化
+             */
+            public class SuperClass {
+                static {
+                    System.out.println("Superclass init");
+                }
+            
+                public static int value = 123;
+            }
+            
+            public class NotInitialization {
+                public static void main(String[] args) {
+                    SuperClass[] sca = new SuperClass[10];
+                }
+            }
+            
+            ```
+
+        4. ```java
+            /**
+             * 被动使用类字段演示三；
+             * 常量在编译阶段会存入调用类的常量池中，本质上没有直接引用到定义常量的类，因此不会触发定义常量的类的初始化
+             */
+            public class ConstClass {
+                static {
+                    System.out.println("Constclass init!");
+                }
+            
+                public static final String HELLOWORLD = "hello world";
+            }
+            
+            public class NotInitialization {
+                public static void main(String[] args) {
+                    System.out.println(ConstClass.HELLOWORLD);
+                }
+            }
+            ```
+
+        5. 上面的代码运行后也没有输出"Constclass init!"。在编译阶段通过常量传播优化，将“hello world”直接存在NotInitialization的常量池了。以后NotInitialization对ConstClass.HELLOWORLD的引用都转化为NotInitialization自身常量池的引用了。
+
+        6. 接口的加载过程与类的加载过程稍有不同
+
+            1. 接口也有初始化过程，这一点与类一致；
+            2. 真正有区别的是上述六种有且仅有情况的第三点：当初始化类的时候，需要先触发其父类的初始化；**<u>接口则不需要其父接口都完成初始化</u>**，只有当真正使用到父接口（如引用接口中定义的常量）才会初始化。
+
+3. **类加载的过程**
+
+    1. **<u>加载</u>**
+
+        1. 做三件事：
+            1. 通过一个类的全限定名来获取定义此类的二进制字节流；
+            2. 将这个字节流代表的静态存储结构转化为方法区的运行时数据结构；
+            3. 在内存中生成一个代表这个类的java.lang.Class对象，作为方法区的这个类的各种数据访问入口；
+        2. 对于数组类来说，他不通过类加载器创建，它是由JVM直接在内存动态构造；
+            1. 如果数组的组件类型是引用类型，那就递归采用上面的加载过程加载这个组件类型，数组将被标识在加载该组件类型的类加载器的类名称空间上；
+            2. 如果数组的组件类型不是引用类型，JVM将会把该数组标记为与启动类加载器关联；
+            3. 数组类的可访问性与他的组件的可访问性一致，如果组件类型不是引用类型，他的数组类的可访问性默认是public。
+        3. 加载阶段结束后，二进制字节流就按照虚拟机设定的格式存储在内存方法区了；
+        4. 加载阶段与连接（验证、解析、初始化）阶段的部分动作交叉进行；
+
+    2. **<u>验证</u>**：确保Class文件的字节流中包含的信息符合《Java虚拟机规范》的全部要求。
+
+        1. 文件格式验证。字节流符合格式规范。
+        2. 元数据验证。字节码描述的信息进行语义分析，确保符合要求。
+        3. 字节码验证，确保程序语义是合法的、符合逻辑的。
+            1. 由于很复杂，JDK6之后给方法体Code属性表中引入“StackMaptable”属性，它描述了方法所有基本块开始时本地变量和操作栈应有的状态。节省了时间。
+        4. 符号引用验证。
+            1. 发生在JVM将符号引用转化为直接引用时，这个发生在“解析”阶段。**确保解析行为能正常执行**。
+            2. 检验这个类是否缺少或者被禁止访问他依赖的外表类、方法、字段等资源。
+
+    3. **<u>准备</u>**：正式为类中定义的变量分配内存并设置变量初始值的阶段。
+
+        1. **这时候进行内存分配的是类变量，不包括实例变量**。实例变量会在对象实例化时随着对象一起分配在Java堆中。
+            1. ```public static int value = 123;``` 在准备阶段过后value的值是0而不是123；
+            2. 特殊情况：如果类字段的字段属性表中存在ConstantValue属性，在准备阶段变量值接会被初始化。```public static final int value = 123;``` 准备阶段虚拟机就会给value赋值123了。
+
+    4. **<u>解析</u>**：JVM将常量池内的符号引用替换为直接引用的过程。
+
+        1. **符号引用**： 以一组符号描述所引用的目标，可以是任意符号，只要是无歧义的定位到目标即可。
+        2. **直接引用**：可以直接指向目标的指针、相对偏移量或者是一个能间接定位到目标的句柄。
+        3. 主要针对类、接口、字段、类方法、接口方法、方法类型、方法句柄和调用点限定符这7类符号引用进行。
+            1. 类或接口的解析
+            2. 字段解析
+            3. 方法解析
+
+    5. **<u>初始化</u>**：根据程序编码制定的计划去初始化变量。**<u>初始化阶段就是执行类构造器```<clinit>()```方法的过程。</u>**
+
+        1. ```<clinit>()```编译器自动收集类中所有的类变量的赋值动作和静态语句的块中的语句合并产生。收集顺序是语句在原文件中出现的顺序。
+
+            1. 静态语句块中只能访问定义在其之前的变量，定义在其之后的变量，可以在这个静态语句块中赋值，但不可以访问。如下代码：
+
+            2. ```java
+                public class TestClass {
+                
+                    static {
+                        i = 0; // 给变量赋值可以正常编译通过
+                        System.out.print(i); // 这句话编译器会提示"非法向前引用"
+                    }
+                    static int i = 1;
+                }
+                ```
+
+        2. ```<clinit>()``` 方法与类的构造函数不同，他不需要显式的调用父类构造器，JVM会保证子类的```<clinit>()``` 执行前，父类的```<clinit>()``` 已经执行完毕。因此在JVM中第一个被执行的```<clinit>()``` 类型肯定是java.lang.Object
+
+        3. 由于父类的```<clinit>()``` 先执行，也意味着父类中定义的静态语句块要有优先于子类的变量赋值操作，如下代码，B的值是2不是1:
+
+            1. ```java
+                public class Parent {
+                    public static int A = 1;
+                    static {
+                        A = 2;
+                    }
+                }
+                    
+                    
+                static class Sub extends Parent {
+                    public static int B = A;
+                }
+                
+                public static void main(String[] args) {
+                    System.out.println(Sub.B);
+                }
+                ```
+
+        4. ```<clinit>()``` 不是必须的，没有静态语句块，没有赋值操作，就不需要。
+
+        5. 接口不能使用静态语句块，但仍然有变量初始化赋值操作，所以接口也会有```<clinit>()``` 方法。但是接口的实现类在初始化时不会执行```<clinit>()``` ，只有用到了才会。
+
+        6. JVM需要保证一个类的```<clinit>()``` 方法在多线程环境被正确的加锁同步。
+
+4. 类加载器：“通过一个类的全限定名来获取描述该类的二进制字节流”实现这个动作的代码称为“**<u>类加载器</u>**”。
+
+    1. 类与类加载器
+
+        1. 每个类都是由**<u>它本身</u>**和**<u>加载它的类加载器</u>**共同确立唯一性。
+
+        2. ```java
+            import java.io.IOException;
+            import java.io.InputStream;
+            
+            /**
+             * 类加载器与instanceof关键字演示
+             */
+            
+            public class ClassLoaderTest {
+                public static void main(String[] args) throws Exception {
+                    ClassLoader myLoader = new ClassLoader() {
+                        @Override
+                        public Class<?> loadClass(String name) throws ClassNotFoundException {
+                            try {
+                                String filename = name.substring(name.lastIndexOf(".") + 1) + ".class";
+                                InputStream is = getClass().getResourceAsStream(filename);
+                                if (is == null) {
+                                    return super.loadClass(name);
+                                }
+                                byte[] b = new byte[is.available()];
+                                is.read(b);
+                                return  defineClass(name, b, 0, b.length);
+                            } catch (IOException e) {
+                                throw new ClassNotFoundException(name);
+                            }
+                        }
+                    };
+            
+                    Object obj = myLoader.loadClass("ClassLoaderTest").newInstance();
+            
+                    System.out.println(obj.getClass());
+                    System.out.println(obj instanceof ClassLoaderTest);
+                }
+            }
+            ```
+
+        3. 运行结果：
+
+            1. class ClassLoaderTest
+                false
+            2. 第二个返回false的原因是因为ClassLoaderTest类一个是由JVM的应用程序类加载器加载的，另外一个是由我们自定义的类加载器加载的，是**<u>两个独立的类</u>**。
+
+    2. 双亲委派模型
+
+        1. (HotSpot)从虚拟机的角度看，只存在两种类加载器：
+
+            1. **<u>启动类加载器</u>**（Bootstrap ClassLoader）：它使用C++实现，是虚拟机的一部分;
+            2. 其他所有类的加载器，由Java实现，独立存在于JVM之外，继承自java.lang.ClassLoader
+
+        2. 启动类加载器：
+
+            1. 负责加载存放在<JAVA_HOME>\lib目录或者被-vootclasspath指定的路径存放的，且能够被JVM识别的类库加载到虚拟机内存
+
+            2. 无法被Java程序直接引用
+
+                1. ```java
+                    /**
+                     * 返回类的类加载器。有些执行会使用null替代启动类加载器，即当这个类是启动类加载器加载的时候这个方法会返回null
+                     */
+                    public ClassLoader getClassLoader() {
+                        ClassLoader cl = getClassLoader0();
+                        if (cl == null) {
+                            return null;
+                        }
+                        SecurityManager sm = System.getSecurityManager();
+                        if (sm != null) {
+                            ClassLoader ccl = ClassLoader.getCallerClassLoader();
+                            if (ccl != null && ccl != cl && cl.isAncestor(ccl)) {
+                              sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
+                            }
+                        }
+                        return cl;
+                    }
+                    ```
+
+        3. 扩展类加载器：Java代码实现，负责加载<JAVA_HOME>\lib\ext或者是被java.ext.dirs系统变量制定的路径中的所有类库
+
+        4. 应用类加载器（系统类加载器）
+
+        5. **<u>双亲委派模型</u>**要求除了顶层的启动类加载器，其余的加载器都需要有自己的父类加载器，这个夫子关系不是继承，而是组合。
+
+            1. <img src="/Users/bytedance/Documents/GitHub/note/Java/深入理解JVM.assets/16a8d30870f9a8e5~tplv-t2oaga2asx-watermark-20211128102943650.awebp" alt="图来自百度" style="zoom:50%;" />
+
+            2. **<u>工作过程</u>**：如果一个类加载器收到了类加载的请求，他首先不会自己去尝试加载这个类，而是把这个**<u>请求委派给父类加载器去完成</u>**，每一个层次的类加载器都是如此，因此所有的加载请求最终都应该传送到最顶层的类启动加载器，只有当父加载器反馈自己无法完成这个加载请求（他的搜索范围没找到所需的类）时，子加载器才会自己去尝试完成加载。
+
+            3. 好处：**类随着类加载器有了带优先级的层级关系**，例如java.lang.Object存放在rt.jar，Object在所有类加载器环境都保证是同一个类
+
+            4. 实现：
+
+                1. ```java
+                    protected Class<?> loadClass(String name, boolean resolve)
+                            throws ClassNotFoundException
+                        {
+                            synchronized (getClassLoadingLock(name)) {
+                                // First, check if the class has already been loaded
+                                Class<?> c = findLoadedClass(name);
+                                if (c == null) {
+                                    try {
+                                        if (parent != null) {
+                                            c = parent.loadClass(name, false);
+                                        } else {
+                                            c = findBootstrapClassOrNull(name);
+                                        }
+                                    } catch (ClassNotFoundException e) {
+                                        // ClassNotFoundException thrown if class not found
+                                        // from the non-null parent class loader
+                                    }
+                    
+                                    if (c == null) {
+                                        // If still not found, then invoke findClass in order
+                                        // to find the class.
+                                        c = findClass(name);
+                                    }
+                                }
+                                if (resolve) {
+                                    resolveClass(c);
+                                }
+                                return c;
+                            }
+                        }
+                    ```
+
+    3. 破坏双亲委派模型（略读）
+
+5. Java模块化系统（略读）
+
+6. 本章小结
+
+    1. **类加载的过程：加载、验证、准备、解析、初始化**都执行了哪些动作
+    2. 还介绍了**类加载器的工作原理以及对虚拟机的意义**
+
 ## 8. 虚拟机字节码执行引擎
+
+1. 概述：从概念模型的角度讲解虚拟机的方法调用和字节码的执行。
+
+2. 运行时栈帧
+
+    1. JVM以**<u>方法</u>**作为**最基本的执行单元**；**栈帧**是用于支持JVM进行方法调用和执行的**<u>数据结构</u>**；存储了局部变量表、操作数栈、动态连接、方法返回地址等信息。
+    2. 在**<u>编译的时候</u>**栈帧需要的内存大小就被分析计算，并且写入到方法表的code属性中
+    3. 一个线程中只有位于栈顶的栈帧才是生效的，被称为**<u>“当前栈帧”</u>**，与这个栈帧关联的方法被称为“**<u>当前方法</u>**”，
+        1. <img src="/Users/bytedance/Documents/GitHub/note/Java/深入理解JVM.assets/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L0RURlRf,size_16,color_FFFFFF,t_70.png" alt="栈帧的概念结构" style="zoom:33%;" />
+    4. 局部变量表：是一组变量值的存储空间，用于存放方法参数和方法内不定义的局部变量。在程序被编译为Class文件的时候，就在方法的Code属性的max_local数据项中确定了该方法所需分配的局部变量表的最大容量。
+        1. Slot为最小单位；可以使用32位或者更小的内存来存储，对于长度超过32位的，可以以高位对齐的方式存到两个slot；
+        2. JVM通过**<u>索引定位</u>**的方法使用局部变量表。
+        3. 当方法被调用时候，JVM会使用局部变量表来完成参数值到参数变量列表的传递过程，即实参到形参的传递
+        4. 为了节省空间，**slot可以重用**，但是有时候会影响GC
+        5. **<u>局部变量没有“准备”阶段</u>**，不赋值就没有初值。
+    5. 操作数栈->LIFO栈：用局部变量表一样，在程序被编译为Class文件的时候，就在方法的Code属性的max_local数据项中确定了该方法所需分配的最大容量。
+        1. 在方法执行过程中，各种字节码指令往操作数栈中写入和提取内容（**<u>入栈出栈</u>**）；
+        2. 元素数据类型和字节码指令的序列严格匹配，eg：iadd只能用于整数类型假发；
+        3. 大多数虚拟机会对栈帧进行优化，会有一些**<u>栈帧重叠</u>**，**节省空间，数据共享**（减少数据复制传递）；
+    6. 动态连接：每个栈帧都包含一个指向运行时常量池该栈帧所属方法的引用，持有这个引用是为了支持方法调用过程中的动态连接。
+        1. 字节码中的**<u>方法的调用</u>**指令就以常量池里只想方法的符号作为参数，这些符号引用一部分在类加载阶段或者第一次使用的时候被转化为直接引用，这种叫**静态解析**，另一部分在每一次运行期间都转化为直接引用，这部分就称为**<u>动态链接</u>**
+    7. 方法返回地址
+        1. **<u>正常调用完成</u>**：执行引擎遇到任意一个方法返回的字节码指令，可能会有返回值传递给上层的方法调用者；<u>是否有返回值以及返回值的类型取决于遇到何种方法返回指令</u>；
+        2. **<u>异常调用完成</u>**：在本方法的异常表**没有搜到匹配的异常处理器**，<u>不会有任何返回值给上层调用</u>。
+        3. 方法退出的过程，可能有这些：恢复上层方法的局部变量表和操作数栈，如果有返回值没把返回值压入调用者栈帧的操作数栈，调整PC执行后面的一条指令。。。
+    8. 附加信息：调试、性能收集相关的信息。
+
+3. 方法调用：确定**<u>被调用的方法的版本</u>**（调用哪一个方法），**不涉及方法内部运行**。
+
+    1. **解析**（静态过程）
+
+        1. 所有方法调用的目标方法在Class文件里面都是一个常量池中的符号引用，在类加载的解析阶段，会将其中一部分符号引用转化为直接引用，前提是：**<u>方法在程序运行前有一个可确定的调用版本，且在运行期不可变。这类方法的调用称为“解析”</u>**
+        2. 主要有**<u>静态方法</u>**和**<u>私有方法</u>**，前者与类型直接关联，后者在外部不可被访问，这两种方法各自的特点决定了他们不可能通过集成活着重写出其他版本，因此适合在类加载阶段进行解析。
+        3. **<u>非虚方法</u>**：静态方法、私有方法、实例构造器、父类方法、再加上final修饰的方法。
+
+    2. **分派**（**<u>多态</u>**特征虚拟机如何确定目标方法）
+
+        1. 静态分派
+
+            1. ```java
+                public class StaticDispatch {
+                
+                    static abstract class Human {
+                    }
+                
+                    static class Man extends Human {
+                    }
+                
+                    static class Woman extends Human {
+                    }
+                
+                    public void sayHello(Human guy) {
+                        System.out.println("hello, guy!");
+                    }
+                
+                    public void sayHello(Man guy) {
+                        System.out.println("hello, gentleman!");
+                    }
+                
+                    public void sayHello(Woman guy) {
+                        System.out.println("hello, lady!");
+                    }
+                
+                    public static void main(String[] args) {
+                        Human man = new Man();
+                        Human woman = new Woman();
+                        StaticDispatch sr = new StaticDispatch();
+                        sr.sayHello(man);
+                        sr.sayHello(woman);
+                    }
+                }
+                ```
+
+                运行结果：
+
+                ```
+                hello, guy!
+                hello, guy!
+                ```
+
+            2. 静态类型（外观类型）：Human，静态类型的变化仅仅在使用时发生，变量本身的静态类型不变，且最终的静态类型在编译期可知；
+
+            3. 实际类型（运行时类型）：Man，实际类型的变化结果在运行期才确定，编译器在编译的时候并不知道对象的实际类型是什么。
+
+            4. 上面代码中，编译器在**<u>重载</u>**时是通过参数的静态类型作为判定依据的，所以在编译期选择了```sayHello(Human guy)```作为调用目标。
+
+            5. 静态分配多数时候只能分配一个**<u>更合适的</u>**。->重载匹配优先级。
+
+        2. 动态分派
+
+            1. <u>**重写**</u>：
+
+                1. ```java
+                    public class DynamicDispatch {
+                    
+                        static abstract class Human {
+                            protected abstract void sayHello();
+                        }
+                    
+                        static class Man extends Human {
+                            @Override
+                            protected void sayHello() {
+                                System.out.println("man say hello");
+                            }
+                        }
+                    
+                        static class Woman extends Human {
+                            @Override
+                            protected void sayHello() {
+                                System.out.println("woman say hello");
+                            }
+                        }
+                    
+                        public static void main(String[] args) {
+                            Human man = new Man();
+                            Human woman = new Woman();
+                            man.sayHello();
+                            woman.sayHello();
+                            man = new Woman();
+                            man.sayHello();
+                        }
+                    }
+                    ```
+
+                    输出结果:
+
+                    ```
+                    man say hello
+                    woman say hello
+                    woman say hello
+                    ```
+
+                2. invokevirtual指令制定的第一步就是在运行期确定接受者的实际类型，所以在两次调用中的invokevirtual指令并不是把常量池中方法的符号引用解析到直接引用上就结束了，还会根据方法接受着的实际类型选择方法版本，这就是**<u>重写</u>**的本质
+
+                3. 字段不参与多态
+
+                    1. ```java
+                        public class FieldHasNoPolymorphic {
+                        
+                            static class Father {
+                                public int money = 1;
+                        
+                                public Father() {
+                                    money = 2;
+                                    showMeTheMoney();
+                                }
+                        
+                                public void showMeTheMoney() {
+                                    System.out.println("I am Father, i have $" + money);
+                                }
+                            }
+                        
+                            static class Son extends Father {
+                                public int money = 3;
+                        
+                                public Son() {
+                                    money = 4;
+                                    showMeTheMoney();
+                                }
+                        
+                                public void showMeTheMoney() {
+                                    System.out.println("I am Son, i have $" + money);
+                                }
+                            }
+                        
+                            public static void main(String[] args) {
+                                Father guy = new Son();
+                                System.out.println("This guy has $" + guy.money);
+                            }
+                        }
+                        ```
+
+                        运行结果：
+
+                        ```
+                        I am Son, i have $0
+                        I am Son, i have $4
+                        This guy has $2
+                        ```
+
+                        结果分析：
+
+                        > 输出两句都是“I am Son”，这是因为Son类创建的时候，首先隐式调用的Father的构造函数，而Father构造函数中对showMeTheMoney()的调用是一次虚方法的调用，实际执行的版本是Son::showMeTheMoney()方法，所以输出是“I am Son”；而这时候虽然父类的money已经被初始化成2了，但是Son::showMeTheMoney()方法中访问的却是子类的money字段，这时候结果还是0，因为他要到子类的构造函数执行的时候才会被初始化，main（）最后一句通过静态类型访问到了父类中的money，输出了2。
+
+        3. 单分派与多分派
+
+            1. 方法的接受者和方法的参数统称为方法的宗量。根据**<u>分派基于多少宗量</u>**可以划分为多分派和单分派。
+
+            2. ```java
+                public class Dispatch {
+                
+                    static class QQ {
+                    }
+                
+                    static class _360 {
+                    }
+                
+                    public static class Father {
+                        public void hardChoice(QQ arg) {
+                            System.out.println("father choose qq");
+                        }
+                
+                        public void hardChoice(_360 arg) {
+                            System.out.println("father choose 360");
+                        }
+                    }
+                
+                    public static class Son extends Father {
+                        public void hardChoice(QQ arg) {
+                            System.out.println("son choose qq");
+                        }
+                
+                        public void hardChoice(_360 arg) {
+                            System.out.println("son choose 360");
+                        }
+                    }
+                
+                    public static void main(String[] args) {
+                        Father father = new Father();
+                        Father son = new Son();
+                        father.hardChoice(new _360());
+                        son.hardChoice(new QQ());
+                    }
+                }
+                ```
+
+                运行结果
+
+                ```
+                father choose 360
+                son choose qq
+                ```
+
+            3. 编译阶段，编译器的选择过程，静态分派的过程。选择目标方法的依据是静态类型是Father还是Son，二是方法参数是QQ还是360，这次选择的产物产生了两个invokevirtual的指令，两个指令的参数分别为常量池中指向Father::hardChoice(360)和Father::hardChoice(QQ)方法的符号引用；根据两个宗量，属于多分派。
+
+            4. 运行阶段虚拟机的选择，动态分派的过程。执行son.hardChoice(new QQ())，由于编译期已经决定目标放大的签名必须是hardChoice(QQ)，唯一可以影响虚拟机选择的因素只有该方法的接受者的实际类型是Father还是Son。只有一个宗量作为选择依据，属于单分派。
+
+        4. 虚拟机动态分派的实现
+
+            1. 多数会在方法区建立一个**<u>虚方法表</u>**来提高性能。
+            2. 一些其他的继承关系分析、守护内联等。。。
+
+4. 动态类型语言支持（Skip）
+
+    1. 动态类型语言
+    2. Java与动态类型
+    3. java.lang.invoke包
+    4. invokedynamic指令
+    5. 实战：掌握方法分派规则
+
+5. 基于栈的字节码执行解释引擎（Skip）
+
+6. 小结
+
+    1. 分析了虚拟机在执行时，**如何找到正确的方法**，**如何执行方法内的字节码**，以及执行代码是涉及的**内存结构。**
 
 ## 9. 类加载于执行子系统的案例与实战（Skip）
 
