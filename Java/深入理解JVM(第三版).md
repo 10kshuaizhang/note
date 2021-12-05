@@ -668,7 +668,7 @@
       
       5. **<u>双亲委派模型</u>**要求除了顶层的启动类加载器，其余的加载器都需要有自己的父类加载器，这个夫子关系不是继承，而是组合。
          
-         1. <img src="/Users/bytedance/Documents/GitHub/note/Java/深入理解JVM.assets/16a8d30870f9a8e5~tplv-t2oaga2asx-watermark-20211128102943650.awebp" alt="图来自百度" style="zoom:50%;" />
+         1. <img src="深入理解JVM.assets/16a8d30870f9a8e5~tplv-t2oaga2asx-watermark-20211128102943650.awebp" alt="图来自百度" style="zoom:50%;" />
          
          2. **<u>工作过程</u>**：如果一个类加载器收到了类加载的请求，他首先不会自己去尝试加载这个类，而是把这个**<u>请求委派给父类加载器去完成</u>**，每一个层次的类加载器都是如此，因此所有的加载请求最终都应该传送到最顶层的类启动加载器，只有当父加载器反馈自己无法完成这个加载请求（他的搜索范围没找到所需的类）时，子加载器才会自己去尝试完成加载。
          
@@ -727,7 +727,7 @@
    1. JVM以**<u>方法</u>**作为**最基本的执行单元**；**栈帧**是用于支持JVM进行方法调用和执行的**<u>数据结构</u>**；存储了局部变量表、操作数栈、动态连接、方法返回地址等信息。
    2. 在**<u>编译的时候</u>**栈帧需要的内存大小就被分析计算，并且写入到方法表的code属性中
    3. 一个线程中只有位于栈顶的栈帧才是生效的，被称为**<u>“当前栈帧”</u>**，与这个栈帧关联的方法被称为“**<u>当前方法</u>**”，
-      1. <img src="/Users/bytedance/Documents/GitHub/note/Java/深入理解JVM.assets/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L0RURlRf,size_16,color_FFFFFF,t_70.png" alt="栈帧的概念结构" style="zoom:33%;" />
+      1. <img src="深入理解JVM.assets/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L0RURlRf,size_16,color_FFFFFF,t_70.png" alt="栈帧的概念结构" style="zoom:33%;" />
    4. 局部变量表：是一组变量值的存储空间，用于存放方法参数和方法内不定义的局部变量。在程序被编译为Class文件的时候，就在方法的Code属性的max_local数据项中确定了该方法所需分配的局部变量表的最大容量。
       1. Slot为最小单位；可以使用32位或者更小的内存来存储，对于长度超过32位的，可以以高位对齐的方式存到两个slot；
       2. JVM通过**<u>索引定位</u>**的方法使用局部变量表。
