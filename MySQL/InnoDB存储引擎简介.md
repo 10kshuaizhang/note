@@ -6,7 +6,7 @@
 
 1. 从MySQL5.5开始，InnoDB是默认的表存储引擎，特点是**行锁设计、支持MVCC、支持外键、提供一致性非锁定读、同时被设计用来有效利用以及使用内存和CPU**
 2. 存储引擎内部有多个内存块， 组成一个内存池， 后台线程负责刷新内存池中的数据、将已经修改的数据刷新到磁盘等等。
-    1. <img src="resources/v2-f6d8f830bb662c3704744b552d2fbd9c_r.jpeg" style="zoom:33%;" />
+    1. <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112121826152.jpeg" style="zoom:33%;" />
     2. 后台线程：有多个不同的线程，负责不同的任务。
         1. Master Thread
             1. 核心线程，**负责将缓冲池中的数据异步刷新到磁盘**，保证数据一致性，包括脏页的刷新、合并插入缓冲、Undo页的回收等。
@@ -80,7 +80,7 @@
                 * sync_water_mark = 90% * total_redo_file_size
                 * 刷新过程如下图所示：
 
-<img src="/Users/bytedance/Documents/GitHub/note/resources/v2-280b31086adb76de9a2f30af551a2680_1440w.png" style="zoom:50%;" />
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112121826322.png" style="zoom:50%;" />
 
 4. Dirty Page too much Checkpoint: 脏页太多，强制checkpoint，保证缓冲池有足够可用的页。
     * 参数设置：innodb_max_dirty_pages_pct = 75 表示：当缓冲池中脏页的数量占75%时，强制checkpoint。
@@ -107,7 +107,7 @@
 
 2. **两次写**-提高可靠性
 
-    <img src="resources/v2-1682a05fa8509fb5273417ee14a21213_1440w.png" style="zoom:50%;" />
+    <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112121826859.png" style="zoom:50%;" />
 
     * 两次写需要额外添加两个部分：
         1）内存中的**两次写缓冲**（doublewrite buffer），大小为2MB
