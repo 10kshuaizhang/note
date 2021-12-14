@@ -1,8 +1,12 @@
-# [一文了解InnoDB存储引擎](https://zhuanlan.zhihu.com/p/47581960) 读后笔记 
-
-## InnoDB体系架构
+# InnoDB体系架构
 
 [一文了解InnoDB存储引擎](https://zhuanlan.zhihu.com/p/47581960) 读后笔记 
+
+主要内容：
+
+- InnoDB体系架构
+- CheckPoint技术
+- InnoDB关键特性
 
 1. 从MySQL5.5开始，InnoDB是默认的表存储引擎，特点是**行锁设计、支持MVCC、支持外键、提供一致性非锁定读、同时被设计用来有效利用以及使用内存和CPU**
 2. 存储引擎内部有多个内存块， 组成一个内存池， 后台线程负责刷新内存池中的数据、将已经修改的数据刷新到磁盘等等。
@@ -11,7 +15,7 @@
         1. Master Thread
             1. 核心线程，**负责将缓冲池中的数据异步刷新到磁盘**，保证数据一致性，包括脏页的刷新、合并插入缓冲、Undo页的回收等。
         2. IO Thread
-            1. InnoDB大量食用异步IO请求， 这个线程主要**处理这些请求的回调**。
+            1. InnoDB大量使用异步IO请求， 这个线程主要**处理这些请求的回调**。
         3. Purge Thread
             1. 回收已经使用并分配的undo页。
             2. 支持多个Purge Thread，加快undo页的回收。
@@ -28,22 +32,22 @@
         2. 如何存储到缓存池？
             1. InnoDB为每个页创建控制信息（表空间编号、页号、页的buffer pool的地址、*一些锁信息和LSN信息*）
             2. 控制块和缓存页是一一对应的，在缓存池中，控制块在前。
-                1. <img src="resources/v2-6f6a5ebdfc6f356392d20d2f639415be_1440w.jpeg" style="zoom:50%;" />
+                1. <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112131946903.jpeg" alt="v2-6f6a5ebdfc6f356392d20d2f639415be_1440w" style="zoom:50%;" />
         3. 缓冲池的管理
             * **free list**
                 * 最初启动mySQL服务器的时候，还没有磁盘页放到缓存池
                 * 随着程序运行，磁盘上的页存到buffer pool
                 * **Free链表**记录可用的页。当刚初始化，所有的页都是空闲的。
-                * <img src="resources/v2-65102c79f334d6b9c490ebf94542833b_1440w.jpeg" style="zoom:67%;" />
+                * <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112131948531.jpeg" alt="v2-65102c79f334d6b9c490ebf94542833b_1440w" style="zoom:25%;" />
                     * 链表的节点记录控制块的地址，控制块记录缓存页地址，相当于链表对应一个空闲的缓存页
                 * 当从磁盘加载一个页时， 从空闲链表取出一个节点。
             * 当free list用完，即分配的缓存池大小用完，需要移除一些缓存页，为了提高后续读写的**缓存命中率**， InnoDB Buffer Pool采用**LRU算法**进行页面淘汰。
                 * 如何实现--引入一个LRU链表，当我们访问一个页时：
-                    * 如果存在缓存池中，直接把该页对应的LRU 链表接电移动到链表头部；
+                    * 如果存在缓存池中，直接把该页对应的LRU 链表节点移动到链表头部；
                     * 如果不在，将该页从磁盘加载到缓存池，并把该缓存页包装成节点放到链表头部。
                 * 上述方式存在**性能**问题，例如一次全表扫描就把数据页大换血
                 * InnoDB做了优化，加入了midpoint。新读取到的页不插入在头部，而是LRU列表的midpoint，这个算法称之为**midpoint insertion stategy**。默认配置插入到列表长度的5/8处。midpoint由参数innodb_old_blocks_pct控制。
-                * midpoint之前的事new列表，之后的是old，new中的可理解为热点数据。
+                * midpoint之前的是new列表，之后的是old，new中的可理解为热点数据。
                 * 同时InnoDB存储引擎还引入了innodb_old_blocks_time来表示页读取到mid位置之后需要等待多久才会被加入到LRU列表的热端。可以通过设置该参数保证热点数据不轻易被刷出。
         4. **脏页**
             1. 缓存池中被更新的页。
@@ -54,15 +58,15 @@
                 1. 脏页链表，也叫FLUSH链表，在LRU中修改过的都需要加入，不需要重复放入。（指向的是LRU链表的页）
                 2. 在FLUSH链表中的脏页是根据oldest_lsn（这个值表示这个页第一次被更改时的lsn号，对应值oldest_modification，每个页头部记录）进行排序刷新到磁盘的，值越小表示要最先被刷新，避免数据不一致。
 
-## CheckPoint技术
+# CheckPoint技术
 
 1. 解决的问题
     1. 缩短数据库恢复时间
     2. 缓冲池不够用的时候，将脏页刷新到磁盘
     3. 重做日志不可用时，刷新脏页
 2. 如何缩短数据库恢复时间？
-    1. redo log中记录checkpoint的位置，这个点之前的页已经刷新会磁盘，只需对它之后的日志进行恢复。这样缩短了恢复时间。
-3. buffer pool不够用的时候，根据LRU算法溢出最近最少使用 的页，如果页为脏页，强制执行checkpoint将脏页刷回磁盘。
+    1. redo log中记录checkpoint的位置，这个点之前的页已经刷新回磁盘，只需对它之后的日志进行恢复。这样缩短了恢复时间。
+3. buffer pool不够用的时候，根据LRU算法溢出最近最少使用的页，如果页为脏页，强制执行checkpoint将脏页刷回磁盘。
 4. 重做日志不可用，是指重做日志的这部分不可以被覆盖，为什么？因为：由于重做日志的设计是循环使用的。这部分对应的数据还未刷新到磁盘上。数据库恢复时，如果不需要这部分日志，即可被覆盖；如果需要，必须强制执行checkpoint，将缓冲池中的页至少刷新到当前重做日志的位置。
 5. checkpoint每次刷新多少页到磁盘？每次从哪里取脏页？什么时间触发checkpoint？
     1. **Sharp Checkpoint**：发生在数据库关闭时关闭时，将**所有**的脏页刷回磁盘。（默认）
@@ -140,10 +144,4 @@
 5. **刷新邻接页**
 
     * InnoDB存储引擎在刷新一个脏页时，会检测该页所在区(extent)的所有页，如果是脏页，那么一起刷新。这样做的好处是通过AIO可以将多个IO写操作合并为一个IO操作。
-
-
-
-----
-
-
 
