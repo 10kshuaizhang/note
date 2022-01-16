@@ -801,59 +801,163 @@ MATCH... AGAINST...
 
 ### 7.1.1 概述
 
+1. 要么都做，要么不做
+2. 满足ACID特性
+3. InnoDB默认隔离级别为READ REPEATABLE
+4. ACID
+    1. A：原子性：整个数据库事务是不可分割的工作单位。
+    2. C：一致性：事务将数据库从一种状态转变为下一种一致的状态。
+    3. I：隔离性：要求每个读写事务的对象对其他事物的操作对象能互相分离。
+    4. D：持久性：事务一旦提交，结果是永久性的。
 
+### 7.1.2 分类
 
+1. **扁平事务**：所有的操作处于同一层次，其间的操作是原子的。主要限制是不能提交或者回滚事务的某一部分，或分几个步骤提交。
 
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201111957971.png" alt="image-20220111195713706" style="zoom:25%;" />
 
+2. **带有保存点的扁平事务**：除了支持扁平事务支持的操作，运行在事务执行过程中回到同一事务中较早的一个状态。
 
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201112001855.png" alt="image-20220111200150817" style="zoom:15%;" />
 
+3. **链事务**：当系统崩溃时，保存点是易失的而非持久的。链事务的思想是：在提交一个事务时，释放不需要的数据对象，将必要的处理上下文隐式地传给下一个要开始的事务。
+    1. 下一个事务的开始和当前事务的提交合并为一个操作，下一个事务将看到上一个事务的结果。
+    2. 回滚仅限当前事务，COMMIT后释放当前事务的锁。
+4. **嵌套事务**：层次框架结构。由顶层事务控制着各个层次的事务，子事务控制着局部变化。
+    1. 子树可以是嵌套事务也可以是扁平事务。
+    2. 也结点事务时扁平事务。跟到叶子距离可以不同。
+    3. 子事务可以提交也可以回滚，但不会马上生效。子事务在顶层事务提交后才真正提交。
+    4. 任意一个事务的回滚会引起子事务回滚，子事务仅保留ACI特性，没有D。
 
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201112008425.png" alt="image-20220111200831383" style="zoom:15%;" />
 
-
-
-
-
-
-
-
-
-
-
-
+5. **分布式事务**：分布式环境下的扁平事务。
 
 ## 7.2 事务的实现
 
+1. 隔离性由锁实现，原子性、一致性、持久性通过redo log和undo log实现。
+
+### 7.2.1 redo
+
+#### 1.基本概念
+
+1. 重做日志实现事务的持久性。由重做日志缓冲（易失的）和重做日志文件（持久的）组成。
+2. Force Log at Commit：当事务提交时，必须先将该事务的所有日志写入到重做日志文件进行持久化，待事务的COMMIT操作完成才算完成。
+3. 为了保证每次日志都写入redo log，每次重做日志写入重做日志文件后，innoDB都需要调用一次fsync操作。
+    1. 重做日志缓冲先写入文件系统缓存，为了确保写入磁盘，必须进行次fsync，所以磁盘的性能决定了数据库性能。
+4. 可以手动设置非持久性情况，提高性能。周期性的fsync而非每次提交，但也存在部分事务可能会被丢失的风险。
+5. *binlog：MySQL层面产生的。
+
+#### 2. log block
+
+1. 重做日志文件、重做日志缓存都是以块的方式保存。称为重做日志块，大小为512字节。
+
+    <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201112053269.png" alt="image-20220111205328198" style="zoom:15%;" />
+
+#### 3. log group
+
+1. 逻辑上的概念，由多个redo log file组成。
+2. log buffer刷新内存中log block到磁盘的规则：
+    1. 事务提交
+    2. log buffer一半空间被使用
+    3. log checkpoint时候
+
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201112059137.png" alt="image-20220111205908096" style="zoom:25%;" />
+
+#### 4. 重做日志格式
+
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201112101797.png" alt="image-20220111210139754" style="zoom:35%;" />
+
+#### 5. LSN
+
+1. 日志序列号。占用8字节，单调递增。
+2. 含义：重做日志写入总量‘check point位置；页的版本。
+
+#### 6. 恢复
+
+### 7.2.2 undo
+
+#### 1. 基本概念
+
+1. undo存放在数据库内部的一个特殊段（segment）中，称为undo段，位于共享表空间内。
+
+2. 将数据库逻辑的恢复到原来的样子
+3. 用户执行<u>ROLLBACK</u>时候，会将事务回滚，但是内存表的大小不会收缩。实际上他做的事与原来相反的操作。
+4. undo的另一个作用是<u>MVCC</u>。当用户读取一行时，如该记录一件被另一事务占用，当前事务可以通过undo读取之前的行版本信息，以此实现非锁定读。
+5. undo log会产生redo log，因为undo log也需要持久性的保护。
+
+#### 2. undo存储管理
+
+1. innodb有rollback segment，每个回滚段记录了1024个undo log segment，在每个undo log segment段中进行undo 页的申请。
+2. 事务提交后不能马上删除undo log及他所在的页。因为其他事务可能徐涛通过undo log来得到行记录之前的版本。是否可以删除由purge线程判断。
+
+#### 3. undo log格式
+
+1. undo log 分为 insert undo log和update undo log。因为insert操作的记录支队事务本身可见，对其他事务不可见（隔离性）。该undo log可以在事务提交后直接删除，不需要进行purge操作。
+2. update undo log
+
+#### 4. 查看undo信息
+
+### 7.2.3 purge
+
+1. delete操作只是把记录的delete flag设置为1，记录没有被删除。真正的删除是在purge操作。
+2. 因为innodb支持MVCC，记录不能在事务提交时立即进行处理。
+
+### 7.2.4 group commit
+
+1. 事务提交时会进行两个阶段的操作：
+
+    1. 修改内存中事务对应的信息，并且将日志写入重做日志缓冲；
+    2. 调用fsync将确保日志都从重做日志缓冲写入磁盘。
+
+    步骤2相对步骤1慢，当有事务进行这个过程时，其他事务可以进行步骤1，完成步骤2后，大家使用1次fsync刷新到磁盘，减少磁盘压力。
+
 ## 7.3 事务控制语句
+
+
 
 ## 7.4 隐式提交的SQL语句
 
+1. DDL语句
+2. 用来隐式修改MySQL架构的操作
+3. 管理语句
 
+## 7.5 对于事务操作的统计
 
+1. 事务处理能力 衡量 TPS：（rollback + commit）/ t
 
+## 7.6 事务的隔离级别
 
+1. SQL标准定义的四个隔离级别：READ UNCOMMITTED，READ COMMITTED，REPEATABLE READ，SERIALIZABLE
+2. innoDB 默认REPEATABLE READ，并且使用next-key lock避免幻读，已经达到SQL标准的串行化。
 
+## 7.7 分布式事务
 
+### 7.7.1 MySQL数据库的分布式事务
 
+1. 分布式事务使用两段式提交，第一阶段所有参与全局事务的阶段开始准备，告诉事务管理器他们准备好了。第二阶段事务管理器高速资源管理器执行rollback还是commit。如果任何一个节点不能提交，全部节点被告知回滚。
 
+<img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202201162005841.png" alt="image-20220116200539759" style="zoom:23%;" />
 
+### 7.7.2 内部XA事务
 
+1. 存储引擎和插件之间或者存储引擎之间的分布式事务称为内部XA事务。e.g.binlog和innoDB存储引擎之间。
 
+## 7.8 不好的事务习惯
 
+### 7.8.1 在循环中提交
 
+### 7.8.2 使用自动提交
 
-# 
+### 7.8.3 使用自动回滚
 
+## 7.9 长事务
 
+1. 执行时间长的事务。
 
+## 7.10小结
 
-
-
-
-
-
-
-
-
+本章了解了什么事事务以及如何使用。事务遵循的ACID特性，进一步了解了实现原子性、隔离性的redo log和undo log。还了解了事务隔离级别。最后讨论如何正确的使用事务，最好的做法是把事务的START TRANSACTION、COMMIT、ROLLBACK交给程序完成，而非在存储过程内完成。
 
 # 第八章 备份与恢复（Skip）
 
