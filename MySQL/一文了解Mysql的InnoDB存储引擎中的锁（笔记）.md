@@ -14,7 +14,7 @@
 
 1. MySQL中的锁大概可以分为：
 
-    1. ![img](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112132010549.jpg)
+    1. <img src="https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202112132010549.jpg" alt="img" style="zoom: 33%;" />
 
     2. 锁的对象是**事务**， 用来锁定数据库中的对象例如表页行。一般锁的对象在**commit或rollback**后释放，且有**死锁**机制。
 
@@ -45,6 +45,14 @@
     1. note：当唯一索引是多个列组成，这时候不会优化降级。
 
 3. [MySQL的一致性非锁定读和一致性锁定读](https://www.jianshu.com/p/45900fe75e51)
+
+    1. 一致性非锁定读：要读取的行被加了X锁，这时候读取操作不会等待行上锁的释放，而是会读取行的一个快照（undo log）。（不阻塞）
+
+        <img src="https://upload-images.jianshu.io/upload_images/5679451-7117f62ef2da81df.png?imageMogr2/auto-orient/strip|imageView2/2/w/652/format/webp" alt="img" style="zoom:33%;" />
+
+        note：1）每行记录可能有多个版本；2）在事务隔离级别READ COMMITED和REPEATABLE READ下，InnoDB使用一致性非锁定读。但是对快照的定义不同，RC下，一致性非锁定读总是读取**最新**的一份快照数据，RR总是读取**事务开始时**候的数据版本。
+
+    2. 一致性锁定读：```SELECT ... FOR UPDATE```，显式的给记录加X锁，其他事务不能获取该记录的任何锁。也可以使用```SELECT ...  LOCK IN SHARE MODE```给记录显式的加S锁。
 
 4. InnoDB默认事务隔离级别是RR级别，**<u>可重复读</u>**。该级别下采用next key lock加锁，可以防止幻读现象。
 
