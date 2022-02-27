@@ -338,9 +338,78 @@ Java不像C、C++一样需要手动去管理内存，但是因为如此，如果
    
    介绍了**<u>垃圾收集算法</u>**，若干HotSpot中垃圾收集器，实例代码验证了Java虚拟机中**<u>自动内存分配和回收的主要规则</u>**。
 
-## 4. 虚拟机性能监控、故障处理工具（Skip）
+## 4. 虚拟机性能监控、故障处理工具
 
-## 5. 调优案例分析与实战（Skip）
+1. 概述
+
+2. 基础故障处理工具
+
+    1. jps：虚拟机进程状况工具
+
+        可以列出正在运行的虚拟机进程，并显示虚拟机执行主类名称以及这些进程的本地虚拟机唯一ID。
+
+    2. jstat：虚拟机统计信息监视工具
+
+        可以显示本地或者远程虚拟机进程中的类加载、内存、GC、即时编译等运行时数据。
+
+    3. jinfo：Java配置信息工具
+
+        实时查看和调整虚拟机各项参数。
+
+    4. jmap：Java内存映像工具
+
+        用于生成堆转储快照（一般称为heaodump或dump文件）；还可以查询finalize执行队列，Java堆和方法区的详细信息。
+
+    5. jhat：虚拟机堆转储快照分析工具
+
+    6. jstack：Java堆栈跟踪工具
+
+        用于生成虚拟机当前时刻的线程快照。一般用于定位出现长时间停顿的原因。
+
+    7. 基础工具总结
+
+        ![image-20220225222054313](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202202252220355.png)
+
+        ![image-20220225222103622](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202202252221718.png)
+
+        ![image-20220225222114381](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202202252221478.png)
+
+        ![image-20220225222123902](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202202252221942.png)
+
+        ![image-20220225222132034](https://raw.githubusercontent.com/10kshuaizhang/note-images/main/202202252221132.png)
+
+3. 可视化故障处理工具
+
+    1. JHSDB：给予服务性代理的调试工具
+    2. JConsole：Java见识与管理控制台
+    3. VisualVM：多合故障处理工具
+    4. Java Mission Control：可持续在线的监控工具
+
+4. HotSpot虚拟机插件及工具
+
+5. 小结
+
+## 5. 调优案例分析与实战
+
+1. 概述
+2. 案例分析
+    1. 大内存硬件上的程序部署策略
+        1. 通过一个单独的Java虚拟机实例来管理大量的Java堆内存
+        2. 同时使用若干个Java虚拟机，建立逻辑集群来利用硬件资源
+    2. 集群间同步失败的内存溢出
+    3. 堆外内存导致的溢出错误
+    4. 外部命令导致系统缓慢
+    5. 服务器虚拟机进程崩溃
+    6. 不恰当数据结构导致内存占用过大
+    7. Window虚拟内存导致的长时间停顿
+    8. 由安全点导致的长时间停顿
+3. 实战：Eclipse运行速度调优
+    1. 调优前的程序运行状态
+    2. 升级JDK版本的性能变化及兼容问题
+    3. 编译时间和类加载时间的优化
+    4. 调整内存设置控制垃圾收集频率
+    5. 选择收集器降低延迟
+4. 小结
 
 # 三、虚拟机执行子系统
 
