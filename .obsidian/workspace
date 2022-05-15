@@ -1,14 +1,17 @@
 {
   "main": {
-    "id": "55ffb642cf4ad8bf",
+    "id": "cfce6a133ed1b152",
     "type": "split",
     "children": [
       {
-        "id": "ee065fa4ea84ff63",
+        "id": "450c6b27245b36ad",
         "type": "leaf",
         "state": {
-          "type": "empty",
-          "state": {}
+          "type": "markdown",
+          "state": {
+            "file": "Java/深入理解JVM(第三版).md",
+            "mode": "source"
+          }
         }
       }
     ],
@@ -65,6 +68,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "Java/深入理解JVM(第三版).md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -82,15 +86,17 @@
     "width": 300,
     "collapsed": true
   },
-  "active": "ee065fa4ea84ff63",
+  "active": "450c6b27245b36ad",
   "lastOpenFiles": [
+    "Java/深入理解JVM(第三版).md",
+    "Android/1. 安卓入门.md",
+    "README.md",
+    "Java/实战高并发程序设计(第二版).md",
+    "Java/Java核心编程(卷1)(第11版).md",
     "Java/深入理解JVM.md",
     "resources/v2-f6d8f830bb662c3704744b552d2fbd9c_r.jpeg",
     "resources/v2-65102c79f334d6b9c490ebf94542833b_1440w.jpeg",
     "resources/v2-1682a05fa8509fb5273417ee14a21213_1440w.png",
-    "resources/v2-280b31086adb76de9a2f30af551a2680_1440w.png",
-    "resources/v2-6f6a5ebdfc6f356392d20d2f639415be_1440w.jpeg",
-    "MySQL/InnoDB存储引擎简介.md",
-    "Java/Java核心编程（卷1）.md"
+    "resources/v2-280b31086adb76de9a2f30af551a2680_1440w.png"
   ]
 }
